@@ -1,0 +1,20 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+client_id = "c928121d0f321f7169bace9539088e62"
+name = "Store Cloner By Denys"
+application_url = "https://localhost"
+embedded = true
+
+[build]
+automatically_update_urls_on_dev = true
+include_config_on_deploy = true
+dev_store_url = "store-cloner.myshopify.com"
+
+[webhooks]
+api_version = "2025-01"
+
+[access_scopes]
+scopes = "read_content,read_customers,read_discounts,read_files,read_inventory,read_locales,read_markets,read_metaobject_definitions,read_metaobjects,read_online_store_pages,read_price_rules,read_products,read_publications,read_script_tags,read_shipping,read_themes,read_translations,write_content,write_customers,write_discounts,write_files,write_locales,write_markets,write_metaobject_definitions,write_metaobjects,write_online_store_pages,write_price_rules,write_products,write_publications,write_script_tags,write_themes,write_translations"
+
+[auth]
+redirect_urls = [ "https://localhost/auth/callback", "https://localhost/auth/shopify/callback", "https://localhost/api/auth/callback" ]

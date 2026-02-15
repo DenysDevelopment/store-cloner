@@ -1,0 +1,14 @@
+node_modules/
+.env
+data/
+*.log
+id-mapping.json
+build/
+.cache/
+prisma/dev.sqlite
+prisma/dev.sqlite-journal
+shopify-app/node_modules/
+shopify-app/build/
+shopify-app/prisma/dev.sqlite
+shopify-app/prisma/dev.sqlite-journal
+shopify-app/.cache/

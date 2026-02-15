@@ -1,0 +1,28 @@
+{
+  "name": "shopify-migration",
+  "version": "1.0.0",
+  "description": "Complete Shopify store migration tool - copies all data between stores",
+  "main": "src/index.js",
+  "type": "module",
+  "bin": {
+    "shopify-migrate": "./src/index.js"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "export": "node src/index.js export",
+    "import": "node src/index.js import",
+    "migrate": "node src/index.js migrate",
+    "verify": "node src/index.js verify",
+    "web": "node src/web-server.js"
+  },
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "commander": "^12.1.0",
+    "dotenv": "^16.4.5",
+    "express": "^5.2.1",
+    "node-fetch": "^3.3.2",
+    "open": "^11.0.0",
+    "ora": "^8.0.1",
+    "p-queue": "^8.0.1"
+  }
+}

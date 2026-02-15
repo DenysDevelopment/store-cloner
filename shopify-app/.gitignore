@@ -1,0 +1,7 @@
+node_modules/
+build/
+.env
+prisma/dev.sqlite
+prisma/dev.sqlite-journal
+.cache/
+*.log

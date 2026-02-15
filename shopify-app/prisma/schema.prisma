@@ -1,0 +1,47 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:dev.sqlite"
+}
+
+model Session {
+  id            String    @id
+  shop          String
+  state         String
+  isOnline      Boolean   @default(false)
+  scope         String?
+  expires       DateTime?
+  accessToken   String
+  userId        BigInt?
+  firstName     String?
+  lastName      String?
+  email         String?
+  accountOwner  Boolean   @default(false)
+  locale        String?
+  collaborator  Boolean?  @default(false)
+  emailVerified Boolean?  @default(false)
+}
+
+model MigrationJob {
+  id            String    @id @default(cuid())
+  shop          String
+  sourceShop    String
+  sourceToken   String
+  status        String    @default("pending")
+  modules       String    @default("all")
+  progress      Int       @default(0)
+  currentModule String?
+  totalModules  Int       @default(0)
+  doneModules   Int       @default(0)
+  logs          String    @default("[]")
+  errorMessage  String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  completedAt   DateTime?
+
+  @@index([shop])
+  @@index([status])
+}

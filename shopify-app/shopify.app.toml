@@ -1,0 +1,19 @@
+# Shopify App configuration
+# After creating the app in Partners Dashboard, paste your client_id here
+
+name = "Store Cloner"
+client_id = ""
+application_url = "https://localhost"
+embedded = true
+
+[access_scopes]
+scopes = "read_products,write_products,read_themes,write_themes,read_content,write_content,read_customers,write_customers,read_locales,write_locales,read_translations,write_translations,read_online_store_pages,write_online_store_pages,read_publications,write_publications,read_files,write_files,read_script_tags,write_script_tags,read_price_rules,write_price_rules,read_discounts,write_discounts,read_markets,write_markets,read_metaobject_definitions,write_metaobject_definitions,read_metaobjects,write_metaobjects,read_shipping,read_inventory"
+
+[auth]
+redirect_urls = [ "https://localhost/auth/callback", "https://localhost/auth/shopify/callback", "https://localhost/api/auth/callback" ]
+
+[webhooks]
+api_version = "2026-01"
+
+[pos]
+embedded = false

@@ -1,0 +1,936 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Store Cloner</title>
+		<style>
+			:root {
+				--bg: #0f0f11;
+				--surface: #1a1a1f;
+				--surface2: #222228;
+				--border: #2a2a32;
+				--text: #e4e4e7;
+				--text2: #a1a1aa;
+				--green: #22c55e;
+				--red: #ef4444;
+				--blue: #3b82f6;
+				--yellow: #eab308;
+				--purple: #a855f7;
+				--radius: 12px;
+				--font: 'Inter', -apple-system, system-ui, sans-serif;
+			}
+			* {
+				margin: 0;
+				padding: 0;
+				box-sizing: border-box;
+			}
+			body {
+				font-family: var(--font);
+				background: var(--bg);
+				color: var(--text);
+				min-height: 100vh;
+			}
+
+			.container {
+				max-width: 720px;
+				margin: 0 auto;
+				padding: 40px 20px;
+			}
+			.header {
+				text-align: center;
+				margin-bottom: 40px;
+			}
+			.header h1 {
+				font-size: 28px;
+				font-weight: 700;
+				margin-bottom: 6px;
+				background: linear-gradient(135deg, var(--blue), var(--purple));
+				-webkit-background-clip: text;
+				-webkit-text-fill-color: transparent;
+			}
+			.header p {
+				color: var(--text2);
+				font-size: 14px;
+			}
+
+			.card {
+				background: var(--surface);
+				border: 1px solid var(--border);
+				border-radius: var(--radius);
+				padding: 24px;
+				margin-bottom: 16px;
+			}
+			.card-title {
+				font-size: 13px;
+				font-weight: 600;
+				text-transform: uppercase;
+				letter-spacing: 0.5px;
+				color: var(--text2);
+				margin-bottom: 16px;
+				display: flex;
+				align-items: center;
+				gap: 8px;
+			}
+			.dot {
+				width: 8px;
+				height: 8px;
+				border-radius: 50%;
+			}
+			.dot-blue {
+				background: var(--blue);
+			}
+			.dot-purple {
+				background: var(--purple);
+			}
+			.dot-green {
+				background: var(--green);
+			}
+
+			.field {
+				margin-bottom: 14px;
+			}
+			.field label {
+				display: block;
+				font-size: 13px;
+				color: var(--text2);
+				margin-bottom: 6px;
+				font-weight: 500;
+			}
+			.field input {
+				width: 100%;
+				padding: 10px 14px;
+				background: var(--surface2);
+				border: 1px solid var(--border);
+				border-radius: 8px;
+				color: var(--text);
+				font-size: 14px;
+				outline: none;
+				transition: border-color 0.2s;
+				font-family: var(--font);
+			}
+			.field input:focus {
+				border-color: var(--blue);
+			}
+			.field input::placeholder {
+				color: #555;
+			}
+			.field .hint {
+				font-size: 11px;
+				color: #666;
+				margin-top: 4px;
+			}
+
+			.auth-toggle {
+				display: flex;
+				gap: 0;
+				margin-bottom: 14px;
+				background: var(--surface2);
+				border-radius: 8px;
+				padding: 3px;
+			}
+			.auth-toggle button {
+				flex: 1;
+				padding: 7px 12px;
+				border: none;
+				border-radius: 6px;
+				font-size: 12px;
+				font-weight: 500;
+				cursor: pointer;
+				transition: all 0.2s;
+				font-family: var(--font);
+				color: var(--text2);
+				background: transparent;
+			}
+			.auth-toggle button.active {
+				background: var(--border);
+				color: var(--text);
+			}
+
+			.modules-grid {
+				display: grid;
+				grid-template-columns: 1fr 1fr;
+				gap: 8px;
+				margin-top: 8px;
+			}
+			.module-item {
+				display: flex;
+				align-items: center;
+				gap: 8px;
+				padding: 8px 10px;
+				background: var(--surface2);
+				border-radius: 8px;
+				cursor: pointer;
+				transition: background 0.15s;
+				user-select: none;
+				font-size: 13px;
+			}
+			.module-item:hover {
+				background: #2a2a32;
+			}
+			.module-item input {
+				accent-color: var(--blue);
+			}
+			.module-actions {
+				display: flex;
+				gap: 12px;
+				margin-bottom: 8px;
+			}
+			.module-actions button {
+				background: none;
+				border: none;
+				color: var(--blue);
+				cursor: pointer;
+				font-size: 12px;
+				font-weight: 500;
+			}
+
+			.connection-status {
+				display: flex;
+				align-items: center;
+				gap: 6px;
+				font-size: 12px;
+				margin-top: 4px;
+			}
+			.connection-status.ok {
+				color: var(--green);
+			}
+			.connection-status.fail {
+				color: var(--red);
+			}
+			.connection-status.loading {
+				color: var(--text2);
+			}
+
+			.btn {
+				padding: 12px 32px;
+				border: none;
+				border-radius: 10px;
+				font-size: 15px;
+				font-weight: 600;
+				cursor: pointer;
+				transition: all 0.2s;
+				font-family: var(--font);
+				display: inline-flex;
+				align-items: center;
+				gap: 8px;
+			}
+			.btn-primary {
+				background: linear-gradient(135deg, var(--blue), var(--purple));
+				color: white;
+				width: 100%;
+				justify-content: center;
+			}
+			.btn-primary:hover {
+				opacity: 0.9;
+				transform: translateY(-1px);
+			}
+			.btn-primary:disabled {
+				opacity: 0.4;
+				cursor: not-allowed;
+				transform: none;
+			}
+			.btn-test {
+				background: var(--surface2);
+				color: var(--text2);
+				border: 1px solid var(--border);
+				padding: 8px 16px;
+				font-size: 12px;
+				border-radius: 8px;
+				margin-top: 4px;
+			}
+			.btn-test:hover {
+				color: var(--text);
+				border-color: var(--blue);
+			}
+			.btn-cancel {
+				background: var(--surface2);
+				color: var(--red);
+				border: 1px solid var(--border);
+				padding: 8px 20px;
+				font-size: 13px;
+			}
+			.btn-new {
+				background: var(--surface2);
+				color: var(--text);
+				border: 1px solid var(--border);
+				padding: 8px 20px;
+				font-size: 13px;
+				border-radius: 10px;
+			}
+
+			.progress-section {
+				margin-bottom: 16px;
+			}
+			.progress-bar-bg {
+				width: 100%;
+				height: 6px;
+				background: var(--surface2);
+				border-radius: 3px;
+				overflow: hidden;
+				margin: 10px 0;
+			}
+			.progress-bar-fill {
+				height: 100%;
+				background: linear-gradient(90deg, var(--blue), var(--purple));
+				border-radius: 3px;
+				transition: width 0.3s ease;
+			}
+			.progress-info {
+				display: flex;
+				justify-content: space-between;
+				font-size: 13px;
+				color: var(--text2);
+			}
+			.progress-percent {
+				font-weight: 600;
+				color: var(--text);
+			}
+
+			.status-badge {
+				display: inline-flex;
+				align-items: center;
+				gap: 6px;
+				padding: 4px 12px;
+				border-radius: 20px;
+				font-size: 12px;
+				font-weight: 600;
+			}
+			.status-running {
+				background: rgba(59, 130, 246, 0.15);
+				color: var(--blue);
+			}
+			.status-completed {
+				background: rgba(34, 197, 94, 0.15);
+				color: var(--green);
+			}
+			.status-failed {
+				background: rgba(239, 68, 68, 0.15);
+				color: var(--red);
+			}
+			.status-cancelled {
+				background: rgba(234, 179, 8, 0.15);
+				color: var(--yellow);
+			}
+
+			.log-container {
+				background: var(--bg);
+				border: 1px solid var(--border);
+				border-radius: 8px;
+				max-height: 350px;
+				overflow-y: auto;
+				padding: 12px;
+				font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', monospace;
+				font-size: 12px;
+				line-height: 1.6;
+			}
+			.log-entry {
+				white-space: pre-wrap;
+				word-break: break-all;
+			}
+			.log-time {
+				color: #555;
+				margin-right: 8px;
+			}
+			.log-info {
+				color: var(--text2);
+			}
+			.log-success {
+				color: var(--green);
+			}
+			.log-error {
+				color: var(--red);
+			}
+			.log-warn {
+				color: var(--yellow);
+			}
+
+			.result-banner {
+				padding: 16px;
+				border-radius: 10px;
+				display: flex;
+				align-items: center;
+				gap: 12px;
+				font-size: 14px;
+				font-weight: 500;
+				margin-bottom: 16px;
+			}
+			.result-banner.success {
+				background: rgba(34, 197, 94, 0.1);
+				border: 1px solid rgba(34, 197, 94, 0.2);
+				color: var(--green);
+			}
+			.result-banner.error {
+				background: rgba(239, 68, 68, 0.1);
+				border: 1px solid rgba(239, 68, 68, 0.2);
+				color: var(--red);
+			}
+
+			.footer {
+				text-align: center;
+				margin-top: 32px;
+				font-size: 12px;
+				color: #444;
+			}
+			.spinner {
+				width: 16px;
+				height: 16px;
+				border: 2px solid transparent;
+				border-top-color: currentColor;
+				border-radius: 50%;
+				animation: spin 0.6s linear infinite;
+				display: inline-block;
+			}
+			@keyframes spin {
+				to {
+					transform: rotate(360deg);
+				}
+			}
+			.actions-row {
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				margin-top: 16px;
+			}
+			.hidden {
+				display: none !important;
+			}
+			@media (max-width: 600px) {
+				.modules-grid {
+					grid-template-columns: 1fr;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<div class="container">
+			<div class="header">
+				<h1>Store Cloner</h1>
+				<p>Clone your Shopify store in one click</p>
+			</div>
+
+			<!-- Setup form -->
+			<div id="setup">
+				<!-- Source -->
+				<div class="card">
+					<div class="card-title">
+						<span class="dot dot-blue"></span> Source Store (copy from)
+					</div>
+					<div class="field">
+						<label>Store domain</label>
+						<input
+							type="text"
+							id="srcShop"
+							placeholder="store-name.myshopify.com"
+							autocomplete="off"
+						/>
+					</div>
+					<div class="auth-toggle">
+						<button class="active" onclick="setAuthMode('src', 'creds')">
+							Client ID + Secret
+						</button>
+						<button onclick="setAuthMode('src', 'token')">Access Token</button>
+					</div>
+					<div id="srcCredsFields">
+						<div class="field">
+							<label>Client ID</label>
+							<input
+								type="text"
+								id="srcClientId"
+								placeholder="e.g. 975300487831f2c8bc5e912d33ceca3e"
+								autocomplete="off"
+							/>
+						</div>
+						<div class="field">
+							<label>Client Secret</label>
+							<input
+								type="password"
+								id="srcClientSecret"
+								placeholder="shpss_..."
+								autocomplete="off"
+							/>
+						</div>
+					</div>
+					<div id="srcTokenField" class="hidden">
+						<div class="field">
+							<label>Admin API access token</label>
+							<input
+								type="password"
+								id="srcToken"
+								placeholder="shpat_..."
+								autocomplete="off"
+							/>
+							<div class="hint">
+								Settings → Apps → Develop apps → Admin API access token
+							</div>
+						</div>
+					</div>
+					<button class="btn btn-test" onclick="testConnection('src')">
+						Test connection
+					</button>
+					<div id="srcStatus"></div>
+				</div>
+
+				<!-- Target -->
+				<div class="card">
+					<div class="card-title">
+						<span class="dot dot-purple"></span> Target Store (copy to)
+					</div>
+					<div class="field">
+						<label>Store domain</label>
+						<input
+							type="text"
+							id="tgtShop"
+							placeholder="new-store.myshopify.com"
+							autocomplete="off"
+						/>
+					</div>
+					<div class="auth-toggle">
+						<button class="active" onclick="setAuthMode('tgt', 'creds')">
+							Client ID + Secret
+						</button>
+						<button onclick="setAuthMode('tgt', 'token')">Access Token</button>
+					</div>
+					<div id="tgtCredsFields">
+						<div class="field">
+							<label>Client ID</label>
+							<input
+								type="text"
+								id="tgtClientId"
+								placeholder="e.g. 21f2904905a045a4b4fbb321e6d52c77"
+								autocomplete="off"
+							/>
+						</div>
+						<div class="field">
+							<label>Client Secret</label>
+							<input
+								type="password"
+								id="tgtClientSecret"
+								placeholder="shpss_..."
+								autocomplete="off"
+							/>
+						</div>
+					</div>
+					<div id="tgtTokenField" class="hidden">
+						<div class="field">
+							<label>Admin API access token</label>
+							<input
+								type="password"
+								id="tgtToken"
+								placeholder="shpat_..."
+								autocomplete="off"
+							/>
+						</div>
+					</div>
+					<button class="btn btn-test" onclick="testConnection('tgt')">
+						Test connection
+					</button>
+					<div id="tgtStatus"></div>
+				</div>
+
+				<!-- Modules -->
+				<div class="card">
+					<div class="card-title">
+						<span class="dot dot-green"></span> What to clone
+					</div>
+					<div class="module-actions">
+						<button onclick="selectAll()">Select all</button>
+						<button onclick="selectNone()">Deselect all</button>
+					</div>
+					<div class="modules-grid" id="modulesList"></div>
+				</div>
+
+				<button
+					class="btn btn-primary"
+					id="startBtn"
+					onclick="startClone()"
+					disabled
+				>
+					Clone Store
+				</button>
+			</div>
+
+			<!-- Progress view -->
+			<div id="progress" class="hidden">
+				<div class="card">
+					<div
+						style="
+							display: flex;
+							justify-content: space-between;
+							align-items: center;
+							margin-bottom: 16px;
+						"
+					>
+						<h2 style="font-size: 18px; font-weight: 600">Migration</h2>
+						<span id="statusBadge" class="status-badge status-running"
+							><span class="spinner"></span> Running</span
+						>
+					</div>
+					<div id="resultBanner"></div>
+					<div class="progress-section">
+						<div class="progress-info">
+							<span id="currentModule">Starting...</span>
+							<span
+								><span id="doneModules">0</span>/<span id="totalModules"
+									>0</span
+								>
+								modules</span
+							>
+						</div>
+						<div class="progress-bar-bg">
+							<div
+								class="progress-bar-fill"
+								id="progressBar"
+								style="width: 0%"
+							></div>
+						</div>
+						<div class="progress-info">
+							<span></span
+							><span class="progress-percent" id="progressPercent">0%</span>
+						</div>
+					</div>
+					<div
+						style="
+							margin-bottom: 8px;
+							font-size: 13px;
+							color: var(--text2);
+							font-weight: 500;
+						"
+					>
+						Logs
+					</div>
+					<div class="log-container" id="logContainer"></div>
+					<div class="actions-row">
+						<button
+							class="btn btn-new hidden"
+							id="newBtn"
+							onclick="newMigration()"
+						>
+							New migration
+						</button>
+						<button class="btn btn-cancel" id="cancelBtn" onclick="cancelJob()">
+							Cancel
+						</button>
+					</div>
+				</div>
+			</div>
+
+			<div class="footer">
+				<div style="margin-top: 12px">
+					Developed with 💛 by
+					<a
+						href="https://t.me/denys_maksymuck"
+						target="_blank"
+						style="color: var(--blue); text-decoration: none"
+						>Denys</a
+					>
+				</div>
+			</div>
+		</div>
+
+		<script>
+			let currentJobId = null,
+				eventSource = null,
+				modules = [];
+			const authModes = { src: 'creds', tgt: 'creds' };
+
+			// Load modules
+			fetch('/api/modules')
+				.then(r => r.json())
+				.then(data => {
+					modules = data;
+					document.getElementById('modulesList').innerHTML = data
+						.map(
+							m =>
+								`<label class="module-item"><input type="checkbox" value="${m.name}" checked> ${m.label}</label>`,
+						)
+						.join('');
+					checkReady();
+				});
+
+			// Prefill from .env
+			fetch('/api/prefill')
+				.then(r => r.json())
+				.then(data => {
+					if (data.sourceShop)
+						document.getElementById('srcShop').value = data.sourceShop;
+					if (data.sourceToken) {
+						document.getElementById('srcToken').value = data.sourceToken;
+						setAuthMode('src', 'token');
+					}
+					if (data.sourceClientId)
+						document.getElementById('srcClientId').value = data.sourceClientId;
+					if (data.sourceClientSecret)
+						document.getElementById('srcClientSecret').value =
+							data.sourceClientSecret;
+					if (data.targetShop)
+						document.getElementById('tgtShop').value = data.targetShop;
+					if (data.targetToken) {
+						document.getElementById('tgtToken').value = data.targetToken;
+						setAuthMode('tgt', 'token');
+					}
+					if (data.targetClientId)
+						document.getElementById('tgtClientId').value = data.targetClientId;
+					if (data.targetClientSecret)
+						document.getElementById('tgtClientSecret').value =
+							data.targetClientSecret;
+					// Auto-select auth mode based on what's available
+					if (!data.sourceToken && data.sourceClientId)
+						setAuthMode('src', 'creds');
+					if (!data.targetToken && data.targetClientId)
+						setAuthMode('tgt', 'creds');
+					checkReady();
+				})
+				.catch(() => {});
+
+			function setAuthMode(prefix, mode) {
+				authModes[prefix] = mode;
+				const btns = document
+					.querySelector(`#${prefix === 'src' ? 'setup' : 'setup'}`)
+					.querySelectorAll(
+						`.card:nth-child(${prefix === 'src' ? 1 : 2}) .auth-toggle button`,
+					);
+				// Find the right card
+				const cards = document.querySelectorAll('#setup > .card');
+				const card = prefix === 'src' ? cards[0] : cards[1];
+				card.querySelectorAll('.auth-toggle button').forEach((b, i) => {
+					b.classList.toggle(
+						'active',
+						(mode === 'creds' && i === 0) || (mode === 'token' && i === 1),
+					);
+				});
+				document
+					.getElementById(`${prefix}CredsFields`)
+					.classList.toggle('hidden', mode !== 'creds');
+				document
+					.getElementById(`${prefix}TokenField`)
+					.classList.toggle('hidden', mode !== 'token');
+				checkReady();
+			}
+
+			function selectAll() {
+				document
+					.querySelectorAll('#modulesList input')
+					.forEach(i => (i.checked = true));
+			}
+			function selectNone() {
+				document
+					.querySelectorAll('#modulesList input')
+					.forEach(i => (i.checked = false));
+			}
+
+			// Check if form is ready
+			document
+				.querySelectorAll('input')
+				.forEach(i => i.addEventListener('input', checkReady));
+			function checkReady() {
+				const srcOk =
+					document.getElementById('srcShop').value.trim() && getAuthData('src');
+				const tgtOk =
+					document.getElementById('tgtShop').value.trim() && getAuthData('tgt');
+				document.getElementById('startBtn').disabled = !(srcOk && tgtOk);
+			}
+
+			function getAuthData(prefix) {
+				if (authModes[prefix] === 'token') {
+					return document.getElementById(`${prefix}Token`).value.trim()
+						? true
+						: false;
+				}
+				return (
+					document.getElementById(`${prefix}ClientId`).value.trim() &&
+					document.getElementById(`${prefix}ClientSecret`).value.trim()
+				);
+			}
+
+			async function testConnection(prefix) {
+				const shop = document.getElementById(`${prefix}Shop`).value.trim();
+				const el = document.getElementById(`${prefix}Status`);
+				if (!shop) {
+					el.innerHTML =
+						'<div class="connection-status fail">Enter store domain first</div>';
+					return;
+				}
+
+				const body = { shop };
+				if (authModes[prefix] === 'token') {
+					body.token = document.getElementById(`${prefix}Token`).value.trim();
+				} else {
+					body.clientId = document
+						.getElementById(`${prefix}ClientId`)
+						.value.trim();
+					body.clientSecret = document
+						.getElementById(`${prefix}ClientSecret`)
+						.value.trim();
+				}
+
+				if (!body.token && (!body.clientId || !body.clientSecret)) {
+					el.innerHTML =
+						'<div class="connection-status fail">Fill in credentials first</div>';
+					return;
+				}
+
+				el.innerHTML =
+					'<div class="connection-status loading"><span class="spinner"></span> Testing connection...</div>';
+				try {
+					const res = await fetch('/api/test-connection', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify(body),
+					});
+					const data = await res.json();
+					if (data.ok) {
+						const via = data.tokenResolved ? ' (via Client Credentials)' : '';
+						el.innerHTML = `<div class="connection-status ok">&#10003; Connected: ${data.name}${via}</div>`;
+					} else {
+						el.innerHTML = `<div class="connection-status fail">&#10007; ${data.error}</div>`;
+					}
+				} catch (err) {
+					el.innerHTML = `<div class="connection-status fail">&#10007; ${err.message}</div>`;
+				}
+			}
+
+			async function startClone() {
+				const selected = [
+					...document.querySelectorAll('#modulesList input:checked'),
+				].map(i => i.value);
+				if (!selected.length) return alert('Select at least one module');
+
+				const body = {
+					sourceShop: document.getElementById('srcShop').value.trim(),
+					targetShop: document.getElementById('tgtShop').value.trim(),
+					modules: selected.join(','),
+				};
+
+				if (authModes.src === 'token')
+					body.sourceToken = document.getElementById('srcToken').value.trim();
+				else {
+					body.sourceClientId = document
+						.getElementById('srcClientId')
+						.value.trim();
+					body.sourceClientSecret = document
+						.getElementById('srcClientSecret')
+						.value.trim();
+				}
+
+				if (authModes.tgt === 'token')
+					body.targetToken = document.getElementById('tgtToken').value.trim();
+				else {
+					body.targetClientId = document
+						.getElementById('tgtClientId')
+						.value.trim();
+					body.targetClientSecret = document
+						.getElementById('tgtClientSecret')
+						.value.trim();
+				}
+
+				document.getElementById('startBtn').disabled = true;
+				try {
+					const res = await fetch('/api/start', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify(body),
+					});
+					const data = await res.json();
+					if (data.error) {
+						alert(data.error);
+						document.getElementById('startBtn').disabled = false;
+						return;
+					}
+					currentJobId = data.jobId;
+					document.getElementById('setup').classList.add('hidden');
+					document.getElementById('progress').classList.remove('hidden');
+					document.getElementById('logContainer').innerHTML = '';
+					document.getElementById('resultBanner').innerHTML = '';
+					document.getElementById('cancelBtn').classList.remove('hidden');
+					document.getElementById('newBtn').classList.add('hidden');
+					document.getElementById('statusBadge').className =
+						'status-badge status-running';
+					document.getElementById('statusBadge').innerHTML =
+						'<span class="spinner"></span> Running';
+
+					eventSource = new EventSource(`/api/stream/${currentJobId}`);
+					eventSource.onmessage = e => {
+						const d = JSON.parse(e.data);
+						if (d.message) addLog(d);
+						updateProgress(d);
+					};
+				} catch (err) {
+					alert('Failed to start: ' + err.message);
+					document.getElementById('startBtn').disabled = false;
+				}
+			}
+
+			function addLog(d) {
+				const c = document.getElementById('logContainer');
+				const div = document.createElement('div');
+				div.className = 'log-entry';
+				const t = d.time ? new Date(d.time).toLocaleTimeString() : '';
+				div.innerHTML = `<span class="log-time">${t}</span><span class="log-${d.level || 'info'}">${esc(d.message)}</span>`;
+				c.appendChild(div);
+				c.scrollTop = c.scrollHeight;
+			}
+
+			function updateProgress(d) {
+				if (d.progress != null) {
+					document.getElementById('progressBar').style.width = d.progress + '%';
+					document.getElementById('progressPercent').textContent =
+						d.progress + '%';
+				}
+				if (d.currentModule)
+					document.getElementById('currentModule').textContent =
+						d.currentModule;
+				if (d.doneModules != null)
+					document.getElementById('doneModules').textContent = d.doneModules;
+				if (d.totalModules != null)
+					document.getElementById('totalModules').textContent = d.totalModules;
+
+				if (d.status === 'completed') {
+					document.getElementById('statusBadge').className =
+						'status-badge status-completed';
+					document.getElementById('statusBadge').innerHTML =
+						'&#10003; Completed';
+					document.getElementById('resultBanner').innerHTML =
+						'<div class="result-banner success">&#127881; Migration complete!</div>';
+					finish();
+				} else if (d.status === 'failed') {
+					document.getElementById('statusBadge').className =
+						'status-badge status-failed';
+					document.getElementById('statusBadge').innerHTML = '&#10007; Failed';
+					document.getElementById('resultBanner').innerHTML =
+						'<div class="result-banner error">Migration failed. Check logs.</div>';
+					finish();
+				} else if (d.status === 'cancelled') {
+					document.getElementById('statusBadge').className =
+						'status-badge status-cancelled';
+					document.getElementById('statusBadge').innerHTML = 'Cancelled';
+					finish();
+				}
+			}
+
+			function finish() {
+				if (eventSource) {
+					eventSource.close();
+					eventSource = null;
+				}
+				document.getElementById('cancelBtn').classList.add('hidden');
+				document.getElementById('newBtn').classList.remove('hidden');
+			}
+			async function cancelJob() {
+				if (currentJobId)
+					await fetch(`/api/cancel/${currentJobId}`, { method: 'POST' });
+			}
+			function newMigration() {
+				document.getElementById('setup').classList.remove('hidden');
+				document.getElementById('progress').classList.add('hidden');
+				document.getElementById('startBtn').disabled = false;
+				currentJobId = null;
+			}
+			function esc(s) {
+				const d = document.createElement('div');
+				d.textContent = s;
+				return d.innerHTML;
+			}
+		</script>
+	</body>
+</html>
