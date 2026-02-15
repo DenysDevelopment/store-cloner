@@ -8,7 +8,7 @@
     "shopify-migrate": "./src/index.js"
   },
   "scripts": {
-    "start": "node src/index.js",
+    "start": "node src/web-server.js",
     "export": "node src/index.js export",
     "import": "node src/index.js import",
     "migrate": "node src/index.js migrate",

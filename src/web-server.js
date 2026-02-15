@@ -609,13 +609,15 @@ app.get('/', (req, res) => {
     res.sendFile(join(__dirname, '..', 'web', 'index.html'));
 });
 
-const PORT = process.env.WEB_PORT || 3456;
-app.listen(PORT, () => {
+const PORT = process.env.PORT || 3456;
+app.listen(PORT, '0.0.0.0', () => {
     console.log('');
     console.log(`  ╔══════════════════════════════════════╗`);
     console.log(`  ║  🛒 Store Cloner                     ║`);
     console.log(`  ║  http://localhost:${PORT}               ║`);
     console.log(`  ╚══════════════════════════════════════╝`);
     console.log('');
-    open(`http://localhost:${PORT}`).catch(() => {});
+    if (!process.env.RAILWAY_ENVIRONMENT) {
+        open(`http://localhost:${PORT}`).catch(() => {});
+    }
 });
