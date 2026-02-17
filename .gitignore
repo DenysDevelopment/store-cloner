@@ -12,3 +12,4 @@ shopify-app/build/
 shopify-app/prisma/dev.sqlite
 shopify-app/prisma/dev.sqlite-journal
 shopify-app/.cache/
+.DS_Store
