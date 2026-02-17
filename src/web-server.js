@@ -188,6 +188,7 @@ function buildGid(type, id) { return `gid://shopify/${type}/${id}`; }
 
 const ALL_MODULES = [
     { name: 'theme', label: 'Theme (sections, templates, assets, locales)' },
+    { name: 'products', label: 'Products (variants, images, metafields)' },
     { name: 'collections', label: 'Collections (smart + custom)' },
     { name: 'pages', label: 'Pages' },
     { name: 'blogs', label: 'Blogs & Articles' },
@@ -290,6 +291,62 @@ async function impTheme(c, _, data, j) {
     appendLog(j, 'info', `${ok}/${data.assets.length} theme assets uploaded`);
 }
 
+// Products
+const PRODUCTS_QUERY = `query P($cursor:String){products(first:50,after:$cursor){pageInfo{hasNextPage}edges{cursor node{id title descriptionHtml handle productType vendor tags status templateSuffix seo{title description} options{name values} variants(first:100){edges{node{id title sku price compareAtPrice barcode inventoryQuantity inventoryPolicy taxable selectedOptions{name value} image{url altText} inventoryItem{measurement{weight{unit value}}requiresShipping}}}} images(first:250){edges{node{id url altText}}} metafields(first:100){edges{node{namespace key value type}}}}}}}`;
+
+async function expProducts(c, j) {
+    const products = await c.graphqlAll(PRODUCTS_QUERY, {}, 'products');
+    appendLog(j, 'info', `${products.length} products`);
+    return products;
+}
+async function impProducts(c, idMap, data, j) {
+    if (!data) return; let ok = 0;
+    for (const product of data) {
+        try {
+            const variants = (product.variants?.edges || []).map(e => e.node);
+            const images = (product.images?.edges || []).map(e => e.node);
+            const metafields = (product.metafields?.edges || []).map(e => e.node);
+            const res = await c.rest('POST', '/products.json', { product: {
+                title: product.title, body_html: product.descriptionHtml, handle: product.handle,
+                product_type: product.productType, vendor: product.vendor,
+                tags: (product.tags || []).join(', '), status: product.status?.toLowerCase() || 'active',
+                template_suffix: product.templateSuffix || '',
+                metafields_global_title_tag: product.seo?.title || '',
+                metafields_global_description_tag: product.seo?.description || '',
+                options: (product.options || []).map(o => ({ name: o.name, values: o.values })),
+                variants: variants.map(v => ({
+                    title: v.title, sku: v.sku || '', price: v.price, compare_at_price: v.compareAtPrice,
+                    barcode: v.barcode || '',
+                    weight: v.inventoryItem?.measurement?.weight?.value || 0,
+                    weight_unit: (v.inventoryItem?.measurement?.weight?.unit || 'KILOGRAMS').toLowerCase().replace('kilograms','kg').replace('grams','g').replace('pounds','lb').replace('ounces','oz'),
+                    inventory_policy: v.inventoryPolicy?.toLowerCase() || 'deny',
+                    taxable: v.taxable, requires_shipping: v.inventoryItem?.requiresShipping ?? true,
+                    option1: v.selectedOptions?.[0]?.value, option2: v.selectedOptions?.[1]?.value, option3: v.selectedOptions?.[2]?.value,
+                })),
+                images: images.map(img => ({ src: img.url, alt: img.altText || '' })),
+                metafields: metafields.map(mf => ({ namespace: mf.namespace, key: mf.key, value: mf.value, type: mf.type })),
+            }});
+            if (res?.product) {
+                const sourceId = extractId(product.id);
+                idMap.set('products', sourceId, String(res.product.id));
+                idMap.setHandleMap('products', product.handle, sourceId, String(res.product.id));
+                // Map variant IDs
+                const tgtVariants = res.product.variants || [];
+                for (let i = 0; i < Math.min(variants.length, tgtVariants.length); i++) {
+                    idMap.set('variants', extractId(variants[i].id), String(tgtVariants[i].id));
+                }
+                // Map image IDs
+                const tgtImages = res.product.images || [];
+                for (let i = 0; i < Math.min(images.length, tgtImages.length); i++) {
+                    idMap.set('images', extractId(images[i].id), String(tgtImages[i].id));
+                }
+                ok++;
+            }
+        } catch (err) { appendLog(j, 'warn', `Product "${product.title}": ${err.message}`); }
+    }
+    appendLog(j, 'info', `${ok}/${data.length} products`);
+}
+
 // Collections
 async function expCollections(c, j) {
     const custom = await c.restGetAll('/custom_collections.json', 'custom_collections');
@@ -351,7 +408,14 @@ async function expMenus(c, j) {
 function remapItems(items, idMap) {
     return (items || []).map(i => {
         const m = { title: i.title, type: i.type, url: i.url || '' };
-        if (i.resourceId) { const sid = extractId(i.resourceId); if (i.resourceId.includes('Collection')) { const t = idMap.get('collections', sid); if (t) m.resourceId = `gid://shopify/Collection/${t}`; } else if (i.resourceId.includes('Page')) { const t = idMap.get('pages', sid); if (t) m.resourceId = `gid://shopify/Page/${t}`; } else if (i.resourceId.includes('Blog')) { const t = idMap.get('blogs', sid); if (t) m.resourceId = `gid://shopify/Blog/${t}`; } }
+        if (i.resourceId) {
+            const sid = extractId(i.resourceId);
+            if (i.resourceId.includes('Product')) { const t = idMap.get('products', sid); if (t) m.resourceId = `gid://shopify/Product/${t}`; }
+            else if (i.resourceId.includes('Collection')) { const t = idMap.get('collections', sid); if (t) m.resourceId = `gid://shopify/Collection/${t}`; }
+            else if (i.resourceId.includes('Page')) { const t = idMap.get('pages', sid); if (t) m.resourceId = `gid://shopify/Page/${t}`; }
+            else if (i.resourceId.includes('Blog')) { const t = idMap.get('blogs', sid); if (t) m.resourceId = `gid://shopify/Blog/${t}`; }
+        }
+        // If no resourceId mapped but we have a URL, keep the URL — it will still work for /products/handle, /collections/handle etc.
         if (i.items?.length) m.items = remapItems(i.items, idMap);
         return m;
     });
@@ -439,8 +503,8 @@ async function impShopSettings(c, _, data, j) {
 }
 
 // Translations
-const TR_TYPES = ['COLLECTION', 'PAGE', 'BLOG', 'ARTICLE', 'LINK', 'SHOP', 'SHOP_POLICY', 'METAOBJECT', 'METAFIELD', 'MENU', 'ONLINE_STORE_THEME', 'EMAIL_TEMPLATE', 'DELIVERY_METHOD_DEFINITION', 'PAYMENT_GATEWAY', 'FILTER'];
-const TR_MAP = { COLLECTION: { g: 'Collection', k: 'collections' }, PAGE: { g: 'Page', k: 'pages' }, BLOG: { g: 'Blog', k: 'blogs' }, ARTICLE: { g: 'Article', k: 'articles' }, METAOBJECT: { g: 'Metaobject', k: 'metaobjects' }, MENU: { g: 'Menu', k: 'menus' } };
+const TR_TYPES = ['PRODUCT', 'COLLECTION', 'PAGE', 'BLOG', 'ARTICLE', 'LINK', 'SHOP', 'SHOP_POLICY', 'METAOBJECT', 'METAFIELD', 'MENU', 'ONLINE_STORE_THEME', 'EMAIL_TEMPLATE', 'DELIVERY_METHOD_DEFINITION', 'PAYMENT_GATEWAY', 'FILTER'];
+const TR_MAP = { PRODUCT: { g: 'Product', k: 'products' }, COLLECTION: { g: 'Collection', k: 'collections' }, PAGE: { g: 'Page', k: 'pages' }, BLOG: { g: 'Blog', k: 'blogs' }, ARTICLE: { g: 'Article', k: 'articles' }, METAOBJECT: { g: 'Metaobject', k: 'metaobjects' }, MENU: { g: 'Menu', k: 'menus' } };
 const TR_CONTENT = new Set(['SHOP', 'LINK', 'ONLINE_STORE_THEME', 'EMAIL_TEMPLATE', 'DELIVERY_METHOD_DEFINITION', 'PAYMENT_GATEWAY', 'SHOP_POLICY', 'FILTER']);
 
 async function expTranslations(c, j) {
@@ -477,8 +541,8 @@ async function impTranslations(c, idMap, data, j) {
     appendLog(j, 'info', `${ok} translation resources`);
 }
 
-const EXPORT_FNS = { theme: expTheme, collections: expCollections, pages: expPages, blogs: expBlogs, menus: expMenus, metafields: expMetafields, metaobjects: expMetaobjects, customers: expCustomers, files: expFiles, redirects: expRedirects, discounts: expDiscounts, 'shop-settings': expShopSettings, translations: expTranslations };
-const IMPORT_FNS = { theme: impTheme, collections: impCollections, pages: impPages, blogs: impBlogs, menus: impMenus, metafields: impMetafields, metaobjects: impMetaobjects, customers: impCustomers, files: impFiles, redirects: impRedirects, discounts: impDiscounts, 'shop-settings': impShopSettings, translations: impTranslations };
+const EXPORT_FNS = { theme: expTheme, products: expProducts, collections: expCollections, pages: expPages, blogs: expBlogs, menus: expMenus, metafields: expMetafields, metaobjects: expMetaobjects, customers: expCustomers, files: expFiles, redirects: expRedirects, discounts: expDiscounts, 'shop-settings': expShopSettings, translations: expTranslations };
+const IMPORT_FNS = { theme: impTheme, products: impProducts, collections: impCollections, pages: impPages, blogs: impBlogs, menus: impMenus, metafields: impMetafields, metaobjects: impMetaobjects, customers: impCustomers, files: impFiles, redirects: impRedirects, discounts: impDiscounts, 'shop-settings': impShopSettings, translations: impTranslations };
 
 // ─── Client Credentials OAuth ─────────────────────────────
 

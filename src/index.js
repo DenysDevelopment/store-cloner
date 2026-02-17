@@ -8,6 +8,7 @@ import ApiClient from './api-client.js';
 import IdMapper from './id-mapper.js';
 import Logger from './logger.js';
 
+import { exportProducts, importProducts } from './modules/products.js';
 import { exportCollections, importCollections } from './modules/collections.js';
 import { exportPages, importPages } from './modules/pages.js';
 import { exportBlogs, importBlogs } from './modules/blogs.js';
@@ -25,6 +26,7 @@ import { exportShopSettings, importShopSettings } from './modules/shop-settings.
 // ─── Module registry in migration order ──────────────────
 const MODULES = [
     { name: 'theme', export: exportTheme, import: importTheme },
+    { name: 'products', export: exportProducts, import: importProducts },
     { name: 'collections', export: exportCollections, import: importCollections },
     { name: 'pages', export: exportPages, import: importPages },
     { name: 'blogs', export: exportBlogs, import: importBlogs },
@@ -240,6 +242,7 @@ program
         console.log(chalk.bold('Comparing resource counts...\n'));
 
         const checks = [
+            { name: 'Products', endpoint: '/products/count.json', key: 'count' },
             { name: 'Collections', endpoint: '/custom_collections/count.json', key: 'count' },
             { name: 'Smart Col.', endpoint: '/smart_collections/count.json', key: 'count' },
             { name: 'Pages', endpoint: '/pages/count.json', key: 'count' },
