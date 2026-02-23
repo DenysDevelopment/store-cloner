@@ -36,6 +36,8 @@ const TRANSLATIONS_QUERY = `
 
 // ─── All translatable resource types ──────────────────────
 const RESOURCE_TYPES = [
+    'PRODUCT',
+    'PRODUCT_VARIANT',
     'COLLECTION',
     'PAGE',
     'BLOG',
@@ -58,6 +60,8 @@ const RESOURCE_TYPES = [
 
 // Map resource type to GID type and ID mapper key
 const RESOURCE_MAP = {
+    PRODUCT: { gidType: 'Product', mapperKey: 'products' },
+    PRODUCT_VARIANT: { gidType: 'ProductVariant', mapperKey: 'variants' },
     COLLECTION: { gidType: 'Collection', mapperKey: 'collections' },
     PAGE: { gidType: 'Page', mapperKey: 'pages' },
     BLOG: { gidType: 'Blog', mapperKey: 'blogs' },
@@ -70,7 +74,8 @@ const RESOURCE_MAP = {
 
 // Resource types that can be matched by content (fallback when no ID mapping)
 const MATCH_BY_CONTENT_TYPES = new Set([
-    'SHOP', 'LINK', 'METAFIELD', 'ONLINE_STORE_THEME', 'ONLINE_STORE_THEME_APP_EMBED',
+    'SHOP', 'PRODUCT', 'PRODUCT_VARIANT', 'LINK', 'METAFIELD',
+    'ONLINE_STORE_THEME', 'ONLINE_STORE_THEME_APP_EMBED',
     'EMAIL_TEMPLATE', 'SMS_TEMPLATE', 'DELIVERY_METHOD_DEFINITION',
     'PAYMENT_GATEWAY', 'SHOP_POLICY', 'FILTER', 'PACKING_SLIP_TEMPLATE',
 ]);
