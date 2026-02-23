@@ -123,6 +123,45 @@ export async function importTheme(targetClient, idMapper, logger, dryRun = false
 
     logger.info(`Target theme: "${targetTheme.name}" (ID: ${targetTheme.id})`);
 
+    // ─── Step 1: Delete ALL old theme files (full theme replacement) ───
+    logger.info('Cleaning old theme files from target store...');
+
+    const existingAssetsRes = await targetClient.rest('GET', `/themes/${targetTheme.id}/assets.json`);
+    const existingAssets = existingAssetsRes?.assets || [];
+    const sourceKeys = new Set(themeData.assets.map(a => a.key));
+
+    // These files are protected by Shopify and cannot be deleted
+    const PROTECTED_FILES = new Set([
+        'layout/theme.liquid',
+        'config/settings_schema.json',
+    ]);
+
+    // Delete existing files that are NOT in our source theme
+    // Also delete files that exist in both (they'll be overwritten anyway, but cleanup first)
+    const filesToDelete = existingAssets.filter(a =>
+        !PROTECTED_FILES.has(a.key) && !sourceKeys.has(a.key)
+    );
+
+    let deleted = 0;
+    for (const asset of filesToDelete) {
+        try {
+            await targetClient.rest(
+                'DELETE',
+                `/themes/${targetTheme.id}/assets.json?asset[key]=${encodeURIComponent(asset.key)}`
+            );
+            deleted++;
+            logger.debug(`  Deleted old file: ${asset.key}`);
+        } catch (err) {
+            // Some files may be protected or required — skip silently
+            logger.debug(`  Could not delete ${asset.key}: ${err.message}`);
+        }
+    }
+
+    logger.info(`Deleted ${deleted}/${filesToDelete.length} old theme files (${existingAssets.length} total existed)`);
+
+    // ─── Step 2: Upload new theme files in correct order ───
+    logger.info('Uploading new theme files...');
+
     let imported = 0;
     const failedAssets = [];
 
@@ -150,6 +189,8 @@ export async function importTheme(targetClient, idMapper, logger, dryRun = false
 
             if (asset.key.startsWith('sections/')) {
                 logger.success(`  Uploaded section: ${asset.key}`);
+            } else if (asset.key.startsWith('templates/')) {
+                logger.success(`  Uploaded template: ${asset.key}`);
             }
         } catch (err) {
             failedAssets.push(asset.key);
@@ -158,7 +199,10 @@ export async function importTheme(targetClient, idMapper, logger, dryRun = false
     }
 
     if (failedAssets.length > 0) {
-        logger.warn(`Failed to upload ${failedAssets.length} assets`);
+        logger.warn(`Failed to upload ${failedAssets.length} assets:`);
+        for (const key of failedAssets) {
+            logger.warn(`  - ${key}`);
+        }
     }
 
     logger.stats('Theme', themeData.assets.length, imported);

@@ -42,6 +42,7 @@ export async function importPages(targetClient, idMapper, logger, dryRun = false
                     body_html: page.body_html,
                     template_suffix: page.template_suffix || '',
                     published: page.published_at ? true : false,
+                    published_at: page.published_at || undefined,
                     metafields: (page._metafields || []).map(mf => ({
                         namespace: mf.namespace,
                         key: mf.key,

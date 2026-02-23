@@ -137,44 +137,51 @@ class ApiClient {
 
     async restGetAll(endpoint, resourceKey) {
         const results = [];
-        let url = `${endpoint}?limit=250`;
+        // Handle endpoints that already have query params (e.g. /collects.json?collection_id=123)
+        let url = endpoint.includes('?')
+            ? `${endpoint}&limit=250`
+            : `${endpoint}?limit=250`;
 
         while (url) {
             const res = await this.queue.add(async () => {
-                const fullUrl = `${this.config.baseUrl}${url}`;
-                const response = await fetch(fullUrl, { headers: this.headers });
+                const maxRetries = 3;
+                for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                    try {
+                        const fullUrl = `${this.config.baseUrl}${url}`;
+                        const response = await fetch(fullUrl, { headers: this.headers });
 
-                if (response.status === 429) {
-                    const retryAfter = parseFloat(response.headers.get('Retry-After') || '2');
-                    this.logger.warn(`REST rate limited, retrying in ${retryAfter}s...`);
-                    await this.sleep(retryAfter * 1000);
-                    return this.restGetAll(url, resourceKey);
-                }
+                        if (response.status === 429) {
+                            const retryAfter = parseFloat(response.headers.get('Retry-After') || '2');
+                            this.logger.warn(`REST rate limited, retrying in ${retryAfter}s...`);
+                            await this.sleep(retryAfter * 1000);
+                            continue;
+                        }
 
-                if (!response.ok) {
-                    throw new Error(`REST GET ${url} → ${response.status}`);
-                }
+                        if (!response.ok) {
+                            throw new Error(`REST GET ${url} → ${response.status}`);
+                        }
 
-                const data = await response.json();
-                const linkHeader = response.headers.get('Link');
-                let nextUrl = null;
+                        const data = await response.json();
+                        const linkHeader = response.headers.get('Link');
+                        let nextUrl = null;
 
-                if (linkHeader) {
-                    const nextMatch = linkHeader.match(/<([^>]+)>;\s*rel="next"/);
-                    if (nextMatch) {
-                        const nextFullUrl = new URL(nextMatch[1]);
-                        nextUrl = nextFullUrl.pathname.replace(`/admin/api/${config.apiVersion}`, '') +
-                            nextFullUrl.search;
+                        if (linkHeader) {
+                            const nextMatch = linkHeader.match(/<([^>]+)>;\s*rel="next"/);
+                            if (nextMatch) {
+                                const nextFullUrl = new URL(nextMatch[1]);
+                                nextUrl = nextFullUrl.pathname.replace(`/admin/api/${config.apiVersion}`, '') +
+                                    nextFullUrl.search;
+                            }
+                        }
+
+                        return { data, nextUrl };
+                    } catch (err) {
+                        if (attempt === maxRetries) throw err;
+                        this.logger.warn(`REST paginate attempt ${attempt} failed: ${err.message}`);
+                        await this.sleep(1000 * attempt);
                     }
                 }
-
-                return { data, nextUrl };
             });
-
-            if (Array.isArray(res)) {
-                results.push(...res);
-                break;
-            }
 
             results.push(...(res.data[resourceKey] || []));
             url = res.nextUrl;

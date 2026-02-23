@@ -71,6 +71,7 @@ export async function importMetafields(targetClient, idMapper, logger, dryRun = 
     }
 
     let imported = 0;
+    let skipped = 0;
 
     // Create metafield definitions
     for (const def of data.definitions || []) {
@@ -112,6 +113,7 @@ export async function importMetafields(targetClient, idMapper, logger, dryRun = 
                 // Skip "already exists" errors
                 if (errors.some(e => e.message?.includes('already exists'))) {
                     logger.info(`Metafield def ${def.namespace}.${def.key} already exists, skipping`);
+                    skipped++;
                 } else {
                     logger.error(`Metafield def errors: ${JSON.stringify(errors)}`);
                 }
@@ -144,6 +146,9 @@ export async function importMetafields(targetClient, idMapper, logger, dryRun = 
         }
     }
 
-    logger.stats('Metafields', (data.definitions?.length || 0) + (data.shopMetafields?.length || 0), imported);
+    if (skipped > 0) {
+        logger.info(`Metafield definitions: ${skipped} already existed (skipped)`);
+    }
+    logger.stats('Metafields', (data.definitions?.length || 0) + (data.shopMetafields?.length || 0), imported + skipped);
     return imported;
 }

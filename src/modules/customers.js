@@ -31,6 +31,7 @@ export async function importCustomers(targetClient, idMapper, logger, dryRun = f
     }
 
     let imported = 0;
+    let skipped = 0;
     for (const customer of customers) {
         if (dryRun) {
             logger.info(`[DRY RUN] Would create customer: ${customer.email}`);
@@ -81,12 +82,16 @@ export async function importCustomers(targetClient, idMapper, logger, dryRun = f
             // Email already exists is common
             if (err.message?.includes('already exists') || err.message?.includes('taken')) {
                 logger.info(`Customer ${customer.email} already exists, skipping`);
+                skipped++;
             } else {
                 logger.error(`Failed to create customer "${customer.email}": ${err.message}`);
             }
         }
     }
 
-    logger.stats('Customers', customers.length, imported);
+    if (skipped > 0) {
+        logger.info(`Customers: ${skipped} already existed (skipped)`);
+    }
+    logger.stats('Customers', customers.length, imported + skipped);
     return imported;
 }

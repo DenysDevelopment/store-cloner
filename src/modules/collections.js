@@ -131,19 +131,33 @@ export async function importCollections(targetClient, idMapper, logger, dryRun =
                 idMapper.setHandleMap('collections', col.handle, String(col.id), String(targetColId));
 
                 // Add products to the collection via collects
-                for (const collect of col._collects || []) {
-                    const targetProductId = idMapper.get('products', String(collect.product_id));
-                    if (targetProductId) {
-                        try {
-                            await targetClient.rest('POST', '/collects.json', {
-                                collect: {
-                                    collection_id: targetColId,
-                                    product_id: parseInt(targetProductId),
-                                },
-                            });
-                        } catch (err) {
-                            logger.warn(`Could not add product ${collect.product_id} to collection: ${err.message}`);
+                const collects = col._collects || [];
+                if (collects.length > 0) {
+                    let addedProducts = 0;
+                    let skippedProducts = 0;
+                    for (const collect of collects) {
+                        const targetProductId = idMapper.get('products', String(collect.product_id));
+                        if (targetProductId) {
+                            try {
+                                await targetClient.rest('POST', '/collects.json', {
+                                    collect: {
+                                        collection_id: targetColId,
+                                        product_id: parseInt(targetProductId),
+                                    },
+                                });
+                                addedProducts++;
+                            } catch (err) {
+                                logger.warn(`Could not add product ${collect.product_id} to collection: ${err.message}`);
+                            }
+                        } else {
+                            skippedProducts++;
                         }
+                    }
+                    if (skippedProducts > 0) {
+                        logger.warn(`Collection "${col.title}": ${skippedProducts}/${collects.length} products skipped (no ID mapping — products module may be disabled)`);
+                    }
+                    if (addedProducts > 0) {
+                        logger.info(`Collection "${col.title}": added ${addedProducts} products`);
                     }
                 }
 
