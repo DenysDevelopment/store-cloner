@@ -633,6 +633,35 @@
 				modules = [];
 			const authModes = { src: 'creds', tgt: 'creds' };
 
+			// ─── LocalStorage persistence ───
+			const STORAGE_KEY = 'store-cloner-config';
+			const FIELD_IDS = ['srcShop', 'srcClientId', 'srcClientSecret', 'srcToken', 'tgtShop', 'tgtClientId', 'tgtClientSecret', 'tgtToken'];
+
+			function saveToStorage() {
+				const data = {};
+				FIELD_IDS.forEach(id => { data[id] = document.getElementById(id).value; });
+				data.authModes = { ...authModes };
+				localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+			}
+
+			function loadFromStorage() {
+				try {
+					const raw = localStorage.getItem(STORAGE_KEY);
+					if (!raw) return false;
+					const data = JSON.parse(raw);
+					let loaded = false;
+					FIELD_IDS.forEach(id => {
+						if (data[id]) { document.getElementById(id).value = data[id]; loaded = true; }
+					});
+					if (data.authModes?.src) setAuthMode('src', data.authModes.src);
+					if (data.authModes?.tgt) setAuthMode('tgt', data.authModes.tgt);
+					return loaded;
+				} catch { return false; }
+			}
+
+			// Restore from localStorage first
+			const hadSaved = loadFromStorage();
+
 			// Load modules
 			fetch('/api/modules')
 				.then(r => r.json())
@@ -647,37 +676,29 @@
 					checkReady();
 				});
 
-			// Prefill from .env
+			// Prefill from .env (only fills empty fields)
 			fetch('/api/prefill')
 				.then(r => r.json())
 				.then(data => {
-					if (data.sourceShop)
-						document.getElementById('srcShop').value = data.sourceShop;
-					if (data.sourceToken) {
-						document.getElementById('srcToken').value = data.sourceToken;
-						setAuthMode('src', 'token');
+					function fillIfEmpty(id, val) {
+						if (val && !document.getElementById(id).value.trim())
+							document.getElementById(id).value = val;
 					}
-					if (data.sourceClientId)
-						document.getElementById('srcClientId').value = data.sourceClientId;
-					if (data.sourceClientSecret)
-						document.getElementById('srcClientSecret').value =
-							data.sourceClientSecret;
-					if (data.targetShop)
-						document.getElementById('tgtShop').value = data.targetShop;
-					if (data.targetToken) {
-						document.getElementById('tgtToken').value = data.targetToken;
-						setAuthMode('tgt', 'token');
+					fillIfEmpty('srcShop', data.sourceShop);
+					fillIfEmpty('srcToken', data.sourceToken);
+					fillIfEmpty('srcClientId', data.sourceClientId);
+					fillIfEmpty('srcClientSecret', data.sourceClientSecret);
+					fillIfEmpty('tgtShop', data.targetShop);
+					fillIfEmpty('tgtToken', data.targetToken);
+					fillIfEmpty('tgtClientId', data.targetClientId);
+					fillIfEmpty('tgtClientSecret', data.targetClientSecret);
+					// Auto-select auth mode only if not restored from localStorage
+					if (!hadSaved) {
+						if (data.sourceToken) setAuthMode('src', 'token');
+						else if (data.sourceClientId) setAuthMode('src', 'creds');
+						if (data.targetToken) setAuthMode('tgt', 'token');
+						else if (data.targetClientId) setAuthMode('tgt', 'creds');
 					}
-					if (data.targetClientId)
-						document.getElementById('tgtClientId').value = data.targetClientId;
-					if (data.targetClientSecret)
-						document.getElementById('tgtClientSecret').value =
-							data.targetClientSecret;
-					// Auto-select auth mode based on what's available
-					if (!data.sourceToken && data.sourceClientId)
-						setAuthMode('src', 'creds');
-					if (!data.targetToken && data.targetClientId)
-						setAuthMode('tgt', 'creds');
 					checkReady();
 				})
 				.catch(() => {});
@@ -705,6 +726,7 @@
 					.getElementById(`${prefix}TokenField`)
 					.classList.toggle('hidden', mode !== 'token');
 				checkReady();
+				saveToStorage();
 			}
 
 			function selectAll() {
@@ -718,10 +740,11 @@
 					.forEach(i => (i.checked = false));
 			}
 
-			// Check if form is ready
-			document
-				.querySelectorAll('input')
-				.forEach(i => i.addEventListener('input', checkReady));
+			// Check if form is ready + auto-save
+			document.querySelectorAll('input').forEach(i => i.addEventListener('input', () => {
+				checkReady();
+				saveToStorage();
+			}));
 			function checkReady() {
 				const srcOk =
 					document.getElementById('srcShop').value.trim() && getAuthData('src');
