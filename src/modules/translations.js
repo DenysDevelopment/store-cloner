@@ -442,19 +442,20 @@ export async function importTranslations(targetClient, idMapper, logger, dryRun 
                     batches.push(translationInputs.slice(i, i + BATCH_SIZE));
                 }
 
+                const registerMutation = `
+                    mutation RegisterTranslations($resourceId: ID!, $translations: [TranslationInput!]!) {
+                        translationsRegister(resourceId: $resourceId, translations: $translations) {
+                            translations { key value locale }
+                            userErrors { field message }
+                        }
+                    }
+                `;
+
                 let localeRegistered = 0;
                 let localeFailed = false;
 
                 for (const batch of batches) {
                     try {
-                        const registerMutation = `
-                            mutation RegisterTranslations($resourceId: ID!, $translations: [TranslationInput!]!) {
-                                translationsRegister(resourceId: $resourceId, translations: $translations) {
-                                    translations { key value locale }
-                                    userErrors { field message }
-                                }
-                            }
-                        `;
 
                         const result = await targetClient.graphql(registerMutation, {
                             resourceId: targetResourceId,
@@ -477,12 +478,54 @@ export async function importTranslations(targetClient, idMapper, logger, dryRun 
 
                 if (localeRegistered > 0) {
                     imported++;
-                    if (batches.length > 1) {
-                        logger.debug(`  ✓ ${resourceType} ${sourceId} → ${locale}: ${localeRegistered} translations (${batches.length} batches)`);
-                    } else {
-                        logger.debug(`  ✓ ${resourceType} ${sourceId} → ${locale}: ${localeRegistered} translations`);
+                    logger.debug(`  ✓ ${resourceType} ${sourceId} → ${locale}: ${localeRegistered}/${translationInputs.length} translations`);
+                }
+
+                // Verify and retry missed translations (handles cache/digest edge cases)
+                if (localeRegistered < translationInputs.length) {
+                    const missedCount = translationInputs.length - localeRegistered;
+                    logger.info(`  ${resourceType} ${sourceId} (${locale}): ${missedCount} translations missed, retrying with fresh digests...`);
+                    try {
+                        const freshData = await targetClient.graphql(`
+                            query($rid: ID!, $loc: String!) {
+                                translatableResource(resourceId: $rid) {
+                                    translatableContent { key digest }
+                                    translations(locale: $loc) { key }
+                                }
+                            }
+                        `, { rid: targetResourceId, loc: locale });
+                        const freshDigests = {};
+                        for (const c of freshData?.translatableResource?.translatableContent || []) {
+                            freshDigests[c.key] = c.digest;
+                        }
+                        const alreadyRegistered = new Set(
+                            (freshData?.translatableResource?.translations || []).map(t => t.key)
+                        );
+                        const retryInputs = translationInputs
+                            .filter(t => !alreadyRegistered.has(t.key) && freshDigests[t.key])
+                            .map(t => ({ ...t, translatableContentDigest: freshDigests[t.key] }));
+
+                        if (retryInputs.length > 0) {
+                            for (let i = 0; i < retryInputs.length; i += BATCH_SIZE) {
+                                const retryBatch = retryInputs.slice(i, i + BATCH_SIZE);
+                                const retryResult = await targetClient.graphql(registerMutation, {
+                                    resourceId: targetResourceId,
+                                    translations: retryBatch,
+                                });
+                                const retried = retryResult?.translationsRegister?.translations?.length || 0;
+                                localeRegistered += retried;
+                                const retryErrors = retryResult?.translationsRegister?.userErrors || [];
+                                if (retryErrors.length > 0) {
+                                    logger.warn(`  Retry errors: ${JSON.stringify(retryErrors)}`);
+                                }
+                            }
+                            logger.info(`  Retry: registered ${localeRegistered}/${translationInputs.length} total`);
+                        }
+                    } catch (err) {
+                        logger.warn(`  Retry failed: ${err.message}`);
                     }
                 }
+
                 if (localeFailed) {
                     failed++;
                 }
