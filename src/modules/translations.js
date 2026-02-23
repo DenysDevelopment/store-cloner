@@ -68,9 +68,9 @@ const RESOURCE_MAP = {
     MENU: { gidType: 'Menu', mapperKey: 'menus' },
 };
 
-// Resource types that don't need ID mapping — matched by content
+// Resource types that can be matched by content (fallback when no ID mapping)
 const MATCH_BY_CONTENT_TYPES = new Set([
-    'SHOP', 'LINK', 'ONLINE_STORE_THEME', 'ONLINE_STORE_THEME_APP_EMBED',
+    'SHOP', 'LINK', 'METAFIELD', 'ONLINE_STORE_THEME', 'ONLINE_STORE_THEME_APP_EMBED',
     'EMAIL_TEMPLATE', 'SMS_TEMPLATE', 'DELIVERY_METHOD_DEFINITION',
     'PAYMENT_GATEWAY', 'SHOP_POLICY', 'FILTER', 'PACKING_SLIP_TEMPLATE',
 ]);
@@ -263,6 +263,9 @@ export async function importTranslations(targetClient, idMapper, logger, dryRun 
             }
         }
 
+        let typeSkipped = 0;
+        let typeImportedCount = 0;
+
         for (const resource of resources) {
             const sourceId = extractId(resource.resourceId);
 
@@ -295,10 +298,13 @@ export async function importTranslations(targetClient, idMapper, logger, dryRun 
             }
 
             if (!targetResourceId) {
-                logger.debug(`No target mapping for ${resourceType} ${sourceId}, skipping`);
+                const contentHint = (resource.translatableContent || []).find(c => c.key === 'title' || c.key === 'value')?.value || '';
+                logger.debug(`No target mapping for ${resourceType} ${sourceId}${contentHint ? ` ("${contentHint.substring(0, 50)}")` : ''}, skipping`);
+                typeSkipped++;
                 skipped++;
                 continue;
             }
+            typeImportedCount++;
 
             // Get the digests from the target resource
             let targetDigests = {};
@@ -399,8 +405,10 @@ export async function importTranslations(targetClient, idMapper, logger, dryRun 
             }
         }
 
-        const typeImported = resources.length;
-        logger.success(`  ${resourceType}: processed ${typeImported} resources`);
+        if (typeSkipped > 0) {
+            logger.warn(`  ${resourceType}: ${typeSkipped}/${resources.length} resources could not be matched to target (skipped)`);
+        }
+        logger.success(`  ${resourceType}: matched ${typeImportedCount}/${resources.length}, skipped ${typeSkipped}`);
     }
 
     logger.info(`Translations summary: imported=${imported}, skipped=${skipped}, failed=${failed}`);
@@ -414,37 +422,65 @@ export async function importTranslations(targetClient, idMapper, logger, dryRun 
 function matchByContent(sourceResource, targetResources) {
     const sourceContent = sourceResource.translatableContent || [];
 
-    // Strategy 1: Match by key set AND title value
+    // Strategy 1: Match by title (exact)
     const sourceTitle = sourceContent.find(c => c.key === 'title')?.value;
-    const sourceKeys = sourceContent.map(c => c.key).sort().join(',');
-
-    for (const tr of targetResources) {
-        const targetContent = tr.translatableContent || [];
-
-        // Try title match first (most specific)
-        if (sourceTitle) {
-            const targetTitle = targetContent.find(c => c.key === 'title')?.value;
+    if (sourceTitle) {
+        for (const tr of targetResources) {
+            const targetTitle = (tr.translatableContent || []).find(c => c.key === 'title')?.value;
             if (targetTitle && sourceTitle === targetTitle) {
                 return tr.resourceId;
             }
         }
+    }
 
-        // Try body match for policies and templates
-        const sourceBody = sourceContent.find(c => c.key === 'body')?.value;
-        if (sourceBody) {
-            const targetBody = targetContent.find(c => c.key === 'body')?.value;
+    // Strategy 2: Match by body (first 200 chars)
+    const sourceBody = sourceContent.find(c => c.key === 'body')?.value;
+    if (sourceBody) {
+        for (const tr of targetResources) {
+            const targetBody = (tr.translatableContent || []).find(c => c.key === 'body')?.value;
             if (targetBody && sourceBody.substring(0, 200) === targetBody.substring(0, 200)) {
                 return tr.resourceId;
             }
         }
     }
 
-    // Strategy 2: Match by key set (fallback for unique resource types like SHOP_POLICY)
+    // Strategy 3: Match by "value" key (for metafields)
+    const sourceValue = sourceContent.find(c => c.key === 'value')?.value;
+    if (sourceValue) {
+        for (const tr of targetResources) {
+            const targetValue = (tr.translatableContent || []).find(c => c.key === 'value')?.value;
+            if (targetValue && sourceValue === targetValue) {
+                return tr.resourceId;
+            }
+        }
+    }
+
+    // Strategy 4: Full content fingerprint (all key:value pairs)
+    const sourceFingerprint = sourceContent
+        .filter(c => c.value)
+        .map(c => `${c.key}:${c.value.substring(0, 100)}`)
+        .sort()
+        .join('|');
+    if (sourceFingerprint) {
+        for (const tr of targetResources) {
+            const targetFingerprint = (tr.translatableContent || [])
+                .filter(c => c.value)
+                .map(c => `${c.key}:${c.value.substring(0, 100)}`)
+                .sort()
+                .join('|');
+            if (targetFingerprint && sourceFingerprint === targetFingerprint) {
+                return tr.resourceId;
+            }
+        }
+    }
+
+    // Strategy 5: Single target resource — match directly (e.g. SHOP, unique types)
     if (targetResources.length === 1) {
         return targetResources[0].resourceId;
     }
 
-    // Strategy 3: Match by matching key set signature
+    // Strategy 6: Match by key set signature
+    const sourceKeys = sourceContent.map(c => c.key).sort().join(',');
     for (const tr of targetResources) {
         const targetKeys = (tr.translatableContent || []).map(c => c.key).sort().join(',');
         if (sourceKeys === targetKeys && sourceKeys.length > 0) {

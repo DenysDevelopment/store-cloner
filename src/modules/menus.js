@@ -79,6 +79,22 @@ function remapMenuItems(items, idMapper) {
     });
 }
 
+function mapMenuItemIds(sourceItems, targetItems, idMapper, logger) {
+    if (!sourceItems || !targetItems) return;
+    for (let i = 0; i < Math.min(sourceItems.length, targetItems.length); i++) {
+        const sourceId = extractId(sourceItems[i].id);
+        const targetId = extractId(targetItems[i].id);
+        if (sourceId && targetId) {
+            idMapper.set('links', sourceId, targetId);
+            logger.debug(`  Mapped link: ${sourceItems[i].title} (${sourceId} → ${targetId})`);
+        }
+        // Recurse for nested items
+        if (sourceItems[i].items && targetItems[i].items) {
+            mapMenuItemIds(sourceItems[i].items, targetItems[i].items, idMapper, logger);
+        }
+    }
+}
+
 export async function importMenus(targetClient, idMapper, logger, dryRun = false) {
     logger.section('Importing Menus');
     const menus = await loadData('menus');
@@ -100,7 +116,16 @@ export async function importMenus(targetClient, idMapper, logger, dryRun = false
             const mutation = `
         mutation MenuCreate($title: String!, $handle: String!, $items: [MenuItemCreateInput!]!) {
           menuCreate(title: $title, handle: $handle, items: $items) {
-            menu { id title handle }
+            menu {
+              id title handle
+              items {
+                id title
+                items {
+                  id title
+                  items { id title }
+                }
+              }
+            }
             userErrors { field message }
           }
         }
@@ -114,6 +139,10 @@ export async function importMenus(targetClient, idMapper, logger, dryRun = false
 
             if (result?.menuCreate?.menu) {
                 idMapper.set('menus', extractId(menu.id), extractId(result.menuCreate.menu.id));
+
+                // Map individual menu item (link) IDs for translations
+                mapMenuItemIds(menu.items, result.menuCreate.menu.items, idMapper, logger);
+
                 imported++;
                 logger.success(`Created menu: ${menu.title}`);
             } else if (result?.menuCreate?.userErrors?.length > 0) {
