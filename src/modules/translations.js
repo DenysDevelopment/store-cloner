@@ -311,14 +311,16 @@ export async function importTranslations(targetClient, idMapper, logger, dryRun 
             }
             typeImportedCount++;
 
-            // Get the digests from the target resource
+            // Get the digests AND values from the target resource
             let targetDigests = {};
+            let targetValues = {};
             try {
                 const digestQuery = `
                     query GetDigests($resourceId: ID!) {
                         translatableResource(resourceId: $resourceId) {
                             translatableContent {
                                 key
+                                value
                                 digest
                                 locale
                             }
@@ -329,11 +331,29 @@ export async function importTranslations(targetClient, idMapper, logger, dryRun 
                 const content = digestData?.translatableResource?.translatableContent || [];
                 for (const c of content) {
                     targetDigests[c.key] = c.digest;
+                    if (c.value) targetValues[c.key] = c.value;
                 }
             } catch (err) {
                 logger.debug(`Could not get digests for ${targetResourceId}: ${err.message}`);
                 skipped++;
                 continue;
+            }
+
+            // Build source content map for value-based key matching
+            const sourceContentMap = {};
+            for (const c of resource.translatableContent || []) {
+                if (c.value) sourceContentMap[c.key] = c.value;
+            }
+
+            // Build reverse map: normalized key → target key (for block ID mismatches)
+            // e.g. "sections.footer.blocks.*.settings.heading" → actual target key
+            const targetNormalizedMap = {};
+            const targetValueToKey = {};
+            for (const [key, val] of Object.entries(targetValues)) {
+                const normalized = key.replace(/blocks\.[a-f0-9_-]+\./gi, 'blocks.*.');
+                if (!targetNormalizedMap[normalized]) targetNormalizedMap[normalized] = key;
+                const valHash = `${normalized}::${val}`;
+                if (!targetValueToKey[valHash]) targetValueToKey[valHash] = key;
             }
 
             // Register translations for each locale
@@ -344,14 +364,55 @@ export async function importTranslations(targetClient, idMapper, logger, dryRun 
                     continue;
                 }
 
-                const translationInputs = trans
-                    .filter(t => t.value && targetDigests[t.key])
-                    .map(t => ({
-                        key: t.key,
-                        value: t.value,
-                        locale,
-                        translatableContentDigest: targetDigests[t.key],
-                    }));
+                let keyRemapped = 0;
+                const translationInputs = [];
+                for (const t of trans) {
+                    if (!t.value) continue;
+
+                    let targetKey = t.key;
+                    let digest = targetDigests[t.key];
+
+                    // If direct key match fails, try fallback strategies
+                    if (!digest) {
+                        // Strategy 1: Match by normalized key (strip block IDs)
+                        const normalized = t.key.replace(/blocks\.[a-f0-9_-]+\./gi, 'blocks.*.');
+                        const sourceVal = sourceContentMap[t.key];
+
+                        // Strategy 2: Match by normalized key + same value
+                        if (sourceVal) {
+                            const valHash = `${normalized}::${sourceVal}`;
+                            const matchedKey = targetValueToKey[valHash];
+                            if (matchedKey && targetDigests[matchedKey]) {
+                                targetKey = matchedKey;
+                                digest = targetDigests[matchedKey];
+                                keyRemapped++;
+                            }
+                        }
+
+                        // Strategy 3: Match by normalized key only (if unique)
+                        if (!digest) {
+                            const matchedKey = targetNormalizedMap[normalized];
+                            if (matchedKey && targetDigests[matchedKey]) {
+                                targetKey = matchedKey;
+                                digest = targetDigests[matchedKey];
+                                keyRemapped++;
+                            }
+                        }
+                    }
+
+                    if (digest) {
+                        translationInputs.push({
+                            key: targetKey,
+                            value: t.value,
+                            locale,
+                            translatableContentDigest: digest,
+                        });
+                    }
+                }
+
+                if (keyRemapped > 0) {
+                    logger.info(`  ${resourceType} ${sourceId} (${locale}): remapped ${keyRemapped} keys (block ID mismatch)`);
+                }
 
                 if (translationInputs.length === 0) continue;
 
