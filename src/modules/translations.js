@@ -238,8 +238,39 @@ export async function importTranslations(targetClient, idMapper, logger, dryRun 
         targetShopId = shopData?.shop?.id;
     } catch { /* skip */ }
 
-    // Pre-fetch target translatable resources for content-match types
+    // Pre-fetch ALL target translatable resources (avoids per-resource API calls)
     const targetResourceCache = {};
+    const targetDigestCache = {}; // resourceId → { digests: {key→digest}, values: {key→value} }
+
+    logger.info('Pre-fetching target translatable resources...');
+    const typesNeeded = Object.keys(translations).filter(t => translations[t]?.length > 0);
+    for (const resourceType of typesNeeded) {
+        try {
+            const resources = await targetClient.graphqlAll(
+                TRANSLATABLE_RESOURCES_QUERY,
+                { resourceType },
+                'translatableResources'
+            );
+            targetResourceCache[resourceType] = resources;
+            // Cache digests and values for each resource
+            for (const r of resources) {
+                const digests = {};
+                const values = {};
+                for (const c of r.translatableContent || []) {
+                    digests[c.key] = c.digest;
+                    if (c.value) values[c.key] = c.value;
+                }
+                targetDigestCache[r.resourceId] = { digests, values };
+            }
+            if (resources.length > 0) {
+                logger.info(`  ${resourceType}: ${resources.length} target resources cached`);
+            }
+        } catch (err) {
+            logger.debug(`  Could not cache target ${resourceType}: ${err.message}`);
+            targetResourceCache[resourceType] = [];
+        }
+    }
+    logger.info('Pre-fetch complete, importing translations...');
 
     let imported = 0;
     let skipped = 0;
@@ -252,21 +283,6 @@ export async function importTranslations(targetClient, idMapper, logger, dryRun 
 
         const mapping = RESOURCE_MAP[resourceType];
         const isContentMatch = MATCH_BY_CONTENT_TYPES.has(resourceType);
-
-        // Pre-fetch target resources for content matching
-        if (isContentMatch && !targetResourceCache[resourceType]) {
-            try {
-                targetResourceCache[resourceType] = await targetClient.graphqlAll(
-                    TRANSLATABLE_RESOURCES_QUERY,
-                    { resourceType },
-                    'translatableResources'
-                );
-                logger.debug(`  Cached ${targetResourceCache[resourceType].length} target ${resourceType} resources`);
-            } catch (err) {
-                logger.debug(`  Could not cache target ${resourceType}: ${err.message}`);
-                targetResourceCache[resourceType] = [];
-            }
-        }
 
         let typeSkipped = 0;
         let typeImportedCount = 0;
@@ -311,32 +327,34 @@ export async function importTranslations(targetClient, idMapper, logger, dryRun 
             }
             typeImportedCount++;
 
-            // Get the digests AND values from the target resource
+            // Get digests and values from cache (no extra API call!)
             let targetDigests = {};
             let targetValues = {};
-            try {
-                const digestQuery = `
-                    query GetDigests($resourceId: ID!) {
-                        translatableResource(resourceId: $resourceId) {
-                            translatableContent {
-                                key
-                                value
-                                digest
-                                locale
+            const cached = targetDigestCache[targetResourceId];
+            if (cached) {
+                targetDigests = cached.digests;
+                targetValues = cached.values;
+            } else {
+                // Fallback: single API call only if not in cache
+                try {
+                    const digestQuery = `
+                        query GetDigests($resourceId: ID!) {
+                            translatableResource(resourceId: $resourceId) {
+                                translatableContent { key value digest locale }
                             }
                         }
+                    `;
+                    const digestData = await targetClient.graphql(digestQuery, { resourceId: targetResourceId });
+                    const content = digestData?.translatableResource?.translatableContent || [];
+                    for (const c of content) {
+                        targetDigests[c.key] = c.digest;
+                        if (c.value) targetValues[c.key] = c.value;
                     }
-                `;
-                const digestData = await targetClient.graphql(digestQuery, { resourceId: targetResourceId });
-                const content = digestData?.translatableResource?.translatableContent || [];
-                for (const c of content) {
-                    targetDigests[c.key] = c.digest;
-                    if (c.value) targetValues[c.key] = c.value;
+                } catch (err) {
+                    logger.debug(`Could not get digests for ${targetResourceId}: ${err.message}`);
+                    skipped++;
+                    continue;
                 }
-            } catch (err) {
-                logger.debug(`Could not get digests for ${targetResourceId}: ${err.message}`);
-                skipped++;
-                continue;
             }
 
             // Build source content map for value-based key matching
